@@ -1,1 +1,7 @@
-flask 
+flask
+langgraph
+langchain-openai
+python-docx
+requests
+gunicorn
+python-dotenv
