@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify
 import threading
 import uuid
 import os
@@ -6,16 +6,22 @@ from agent import run_research_agent
 
 app = Flask(__name__)
 
-# Store job statuses in memory
 jobs = {}
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+@app.route("/ping")
+def ping():
+    return "alive", 200
+
 @app.route("/run", methods=["POST"])
 def run():
-    data = request.json
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
     topic = data.get("topic", "").strip()
     email = data.get("email", "").strip()
 
@@ -37,7 +43,7 @@ def run():
             jobs[job_id]["error"] = str(e)
             jobs[job_id]["done"] = True
 
-    threading.Thread(target=task).start()
+    threading.Thread(target=task, daemon=True).start()
     return jsonify({"job_id": job_id})
 
 @app.route("/status/<job_id>")
@@ -49,4 +55,4 @@ def status(job_id):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    
+    app.run(host="0.0.0.0", port=port)
