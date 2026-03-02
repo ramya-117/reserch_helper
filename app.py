@@ -1,52 +1,45 @@
-from flask import Flask, render_template, request, jsonify, send_file
-import threading
-import uuid
-import os
-from agent import run_research_agent
+from flask import Flask, render_template, request, jsonify
+from agent import run_research
 
 app = Flask(__name__)
-
-# Store job statuses in memory
-jobs = {}
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-@app.route("/run", methods=["POST"])
-def run():
-    data = request.json
+@app.route("/research", methods=["POST"])
+def research():
+    data = request.get_json()
     topic = data.get("topic", "").strip()
-    email = data.get("email", "").strip()
 
-    if not topic or not email:
-        return jsonify({"error": "Topic and email are required."}), 400
+    if not topic:
+        return jsonify({"success": False, "error": "Please enter a research topic!"})
 
-    job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "running", "logs": [], "done": False, "error": None}
+    try:
+        result = run_research(topic)
+        papers = result.get("papers", [])
 
-    def task():
-        try:
-            logs = []
-            run_research_agent(topic, email, log_callback=lambda msg: logs.append(msg))
-            jobs[job_id]["status"] = "done"
-            jobs[job_id]["logs"] = logs
-            jobs[job_id]["done"] = True
-        except Exception as e:
-            jobs[job_id]["status"] = "error"
-            jobs[job_id]["error"] = str(e)
-            jobs[job_id]["done"] = True
+        paper_list = []
+        for p in papers:
+            paper_list.append({
+                "title":   p.get("title", ""),
+                "authors": p.get("authors", ""),
+                "journal": p.get("journal", ""),
+                "year":    p.get("year", ""),
+                "doi":     p.get("doi", "")
+            })
 
-    threading.Thread(target=task).start()
-    return jsonify({"job_id": job_id})
+        return jsonify({
+            "success":    True,
+            "topic":      topic,
+            "papers":     paper_list,
+            "outline":    result.get("outline", "")[:2000],
+            "draft":      result.get("draft", "")[:3000],
+            "email_sent": True
+        })
 
-@app.route("/status/<job_id>")
-def status(job_id):
-    job = jobs.get(job_id)
-    if not job:
-        return jsonify({"error": "Job not found"}), 404
-    return jsonify(job)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    port = int(os.environ.get("PORT", 7860))
+    app.run(debug=False, host="0.0.0.0", port=5000)
