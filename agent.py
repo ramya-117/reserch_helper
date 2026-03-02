@@ -12,12 +12,11 @@ from docx import Document
 import io
 
 # ─────────────────────────────────────────
-# CREDENTIALS
+# CREDENTIALS (only sender is fixed)
 # ─────────────────────────────────────────
 GROQ_API_KEY   = "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"
 EMAIL_SENDER   = "mahadevsputhri@gmail.com"
 EMAIL_PASSWORD = "trsi ximj dxym wjoh"
-EMAIL_RECEIVER = "kgomathi2004@gmail.com"
 
 # ─────────────────────────────────────────
 # LLM
@@ -34,6 +33,7 @@ llm = ChatOpenAI(
 # ─────────────────────────────────────────
 class ResearchState(TypedDict):
     topic: str
+    email: str
     papers: List[dict]
     summaries: List[str]
     outline: str
@@ -58,7 +58,7 @@ def search_published_papers(state: ResearchState):
     try:
         response = requests.get(url, params=params, timeout=15)
         items = response.json().get("message", {}).get("items", [])
-    except Exception as e:
+    except Exception:
         return {"papers": [], "references": []}
 
     papers, references = [], []
@@ -145,6 +145,8 @@ Instructions:
 # ─────────────────────────────────────────
 # 5. BUILD DOCX IN MEMORY
 # ─────────────────────────────────────────
+_docx_store = {}
+
 def export_doc(state: ResearchState):
     doc = Document()
     doc.add_heading(state["topic"], level=1)
@@ -161,12 +163,8 @@ def export_doc(state: ResearchState):
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
-    # Store in state via a global dict (Flask session workaround)
     _docx_store["buffer"] = buffer.getvalue()
     return {}
-
-# Global store for docx bytes between nodes
-_docx_store = {}
 
 # ─────────────────────────────────────────
 # 6. PREPARE EMAIL HTML
@@ -227,14 +225,15 @@ def prepare_email(state: ResearchState):
     return {"email_body": html}
 
 # ─────────────────────────────────────────
-# 7. SEND EMAIL
+# 7. SEND EMAIL — to user's email
 # ─────────────────────────────────────────
 def send_email(state: ResearchState):
+    user_email = state["email"]   # ← user typed this in the UI
     try:
         msg = MIMEMultipart("mixed")
         msg["Subject"] = f"🔬 Research Report: {state['topic']}"
         msg["From"]    = EMAIL_SENDER
-        msg["To"]      = EMAIL_RECEIVER
+        msg["To"]      = user_email
         msg.attach(MIMEText(state["email_body"], "html"))
 
         if "buffer" in _docx_store:
@@ -246,7 +245,7 @@ def send_email(state: ResearchState):
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+            server.sendmail(EMAIL_SENDER, user_email, msg.as_string())
 
         return {"email_sent": True}
     except Exception as e:
@@ -275,14 +274,14 @@ def build_workflow():
     return workflow.compile()
 
 # ─────────────────────────────────────────
-# MAIN FUNCTION called by app.py
+# MAIN — called by app.py
 # ─────────────────────────────────────────
-def run_research(topic: str) -> dict:
-    """Run the full research pipeline. Returns result dict."""
+def run_research(topic: str, email: str) -> dict:
     _docx_store.clear()
     app = build_workflow()
     result = app.invoke({
         "topic": topic,
+        "email": email,
         "papers": [],
         "summaries": [],
         "outline": "",
