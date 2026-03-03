@@ -4,4 +4,4 @@ langchain-openai
 python-docx
 requests
 gunicorn
-python-dotenv
+resend
