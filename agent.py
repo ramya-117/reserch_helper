@@ -6,11 +6,10 @@ from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from docx import Document
-from resend import Resend
+from resend import Resend as ResendClient
 
-# ✅ Load from environment variables
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-EMAIL_SENDER = os.environ.get("EMAIL_SENDER")
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
+EMAIL_SENDER   = os.environ.get("EMAIL_SENDER")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 
 llm = ChatOpenAI(
@@ -49,12 +48,12 @@ def search_published_papers(state: ResearchState):
 
     papers, references = [], []
     for paper in items:
-        title   = paper.get("title", ["Untitled"])[0]
-        year    = paper.get("issued", {}).get("date-parts", [[None]])[0][0]
-        journal = paper.get("container-title", ["Unknown Journal"])[0] if paper.get("container-title") else "Unknown Journal"
-        doi     = paper.get("DOI", "")
+        title    = paper.get("title", ["Untitled"])[0]
+        year     = paper.get("issued", {}).get("date-parts", [[None]])[0][0]
+        journal  = paper.get("container-title", ["Unknown Journal"])[0] if paper.get("container-title") else "Unknown Journal"
+        doi      = paper.get("DOI", "")
         abstract = clean_abstract(paper.get("abstract", ""))
-        authors = ", ".join([f"{a.get('family','')} {a.get('given','')}" for a in paper.get("author", [])]) or "Unknown Author"
+        authors  = ", ".join([f"{a.get('family','')} {a.get('given','')}" for a in paper.get("author", [])]) or "Unknown Author"
         papers.append({"title": title, "abstract": abstract, "year": year, "journal": journal, "authors": authors, "doi": doi})
         references.append(f"{authors} ({year}). {title}. {journal}. https://doi.org/{doi}")
 
@@ -148,11 +147,11 @@ def send_email(state: ResearchState):
     state["log"](f"📤 Sending email to {state['receiver_email']}...")
     try:
         if not RESEND_API_KEY:
-            raise Exception("RESEND_API_KEY not set in environment variables")
+            raise Exception("RESEND_API_KEY not set")
         if not EMAIL_SENDER:
-            raise Exception("EMAIL_SENDER not set in environment variables")
+            raise Exception("EMAIL_SENDER not set")
 
-        client = Resend(api_key=RESEND_API_KEY)
+        client = ResendClient(api_key=RESEND_API_KEY)
         attachments = []
 
         if os.path.exists("published_research_paper.docx"):
@@ -171,7 +170,6 @@ def send_email(state: ResearchState):
             "html": state["email_body"],
             "attachments": attachments
         })
-
         state["log"]("✅ Email sent successfully!")
 
     except Exception as e:
