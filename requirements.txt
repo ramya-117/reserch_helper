@@ -1,7 +1,9 @@
 flask
-langgraph
-langchain-openai
+langgraph>=0.1
+langchain-core>=0.3
+langchain-openai>=0.2
 python-docx
 requests
 gunicorn
 resend
+pydantic>=2.6
